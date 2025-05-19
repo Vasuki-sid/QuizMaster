@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useQuiz } from '../context/QuizContext';
 import LevelCard from '../components/LevelCard';
@@ -12,6 +12,7 @@ import { QuizLevel } from '../types/quiz';
 const Dashboard: React.FC = () => {
   const { currentUser } = useAuth();
   const { startQuiz, levelLocked, userProgress } = useQuiz();
+  const navigate = useNavigate();
   
   // If no user is logged in, redirect to login page
   if (!currentUser) {
@@ -26,6 +27,7 @@ const Dashboard: React.FC = () => {
   // Handler for starting a quiz
   const handleStartQuiz = (level: QuizLevel) => {
     startQuiz(level);
+    navigate('/quiz'); // Ensure we navigate to the quiz page when starting
   };
 
   return (
@@ -55,7 +57,7 @@ const Dashboard: React.FC = () => {
               level={2}
               title="Level 2: Medium"
               description="Intermediate questions that require broader knowledge."
-              isLocked={levelLocked(2)}
+              isLocked={false} {/* Always unlocked */}
               completedScore={userProgress.results[2]?.score}
               totalQuestions={10}
               onStart={() => handleStartQuiz(2)}
@@ -65,7 +67,7 @@ const Dashboard: React.FC = () => {
               level={3}
               title="Level 3: Hard"
               description="Advanced questions that challenge even knowledgeable participants."
-              isLocked={levelLocked(3)}
+              isLocked={false} {/* Always unlocked */}
               completedScore={userProgress.results[3]?.score}
               totalQuestions={10}
               onStart={() => handleStartQuiz(3)}
@@ -74,10 +76,9 @@ const Dashboard: React.FC = () => {
           
           <Card className="mt-8 bg-gray-50 border-dashed">
             <CardContent className="p-6">
-              <h3 className="text-lg font-semibold mb-2">How to Unlock Levels</h3>
+              <h3 className="text-lg font-semibold mb-2">All Levels Unlocked</h3>
               <p className="text-gray-600">
-                To unlock the next level, you need to score at least 70% (7/10) on the current level.
-                Keep practicing to improve your knowledge and unlock all levels!
+                All quiz levels are now available. Choose any level to test your knowledge!
               </p>
             </CardContent>
           </Card>

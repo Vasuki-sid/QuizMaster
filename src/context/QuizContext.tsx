@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext } from 'react';
 import { QuizLevel, QuizQuestion, QuizAnswer, QuizResult, UserQuizProgress } from '../types/quiz';
 import { getQuestionsByLevel } from '../data/quizData';
@@ -42,15 +41,19 @@ export const QuizProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isQuizActive, setIsQuizActive] = useState<boolean>(false);
   const [isQuizCompleted, setIsQuizCompleted] = useState<boolean>(false);
   const [userProgress, setUserProgress] = useState<UserQuizProgress>(
-    currentUser?.progress || { highestLevel: 1, results: {} }
+    currentUser?.progress || { highestLevel: 3, results: {} }
   );
   
   // Update user progress when currentUser changes
   React.useEffect(() => {
     if (currentUser) {
-      setUserProgress(currentUser.progress);
+      // Set user progress with all levels unlocked
+      setUserProgress({
+        ...currentUser.progress,
+        highestLevel: 3 // All levels unlocked
+      });
     } else {
-      setUserProgress({ highestLevel: 1, results: {} });
+      setUserProgress({ highestLevel: 3, results: {} }); // All levels unlocked by default
     }
   }, [currentUser]);
 
@@ -70,6 +73,11 @@ export const QuizProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsQuizCompleted(false);
     
     toast.info(`Level ${level} quiz started!`);
+  };
+
+  // Modified to always return false - all levels are unlocked
+  const levelLocked = (level: QuizLevel): boolean => {
+    return false; // All levels are unlocked
   };
 
   // Select an answer for the current question
@@ -160,12 +168,6 @@ export const QuizProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setResults(null);
     setIsQuizActive(false);
     setIsQuizCompleted(false);
-  };
-
-  // Check if a level is locked for the current user
-  const levelLocked = (level: QuizLevel): boolean => {
-    if (!currentUser) return level > 1;
-    return level > userProgress.highestLevel;
   };
 
   return (

@@ -11,7 +11,7 @@ const Header: React.FC = () => {
     <header className="bg-white shadow-sm border-b">
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
         <Link to="/" className="text-2xl font-bold text-quiz-primary hover:text-quiz-secondary transition-colors">
-          QuizMaster
+          Trivius
         </Link>
         
         <nav className="hidden md:flex items-center space-x-6">
