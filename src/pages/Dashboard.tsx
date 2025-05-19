@@ -57,7 +57,7 @@ const Dashboard: React.FC = () => {
               level={2}
               title="Level 2: Medium"
               description="Intermediate questions that require broader knowledge."
-              isLocked={false} {/* Always unlocked */}
+              isLocked={false}
               completedScore={userProgress.results[2]?.score}
               totalQuestions={10}
               onStart={() => handleStartQuiz(2)}
@@ -67,7 +67,7 @@ const Dashboard: React.FC = () => {
               level={3}
               title="Level 3: Hard"
               description="Advanced questions that challenge even knowledgeable participants."
-              isLocked={false} {/* Always unlocked */}
+              isLocked={false}
               completedScore={userProgress.results[3]?.score}
               totalQuestions={10}
               onStart={() => handleStartQuiz(3)}
@@ -105,7 +105,7 @@ const Dashboard: React.FC = () => {
               <div className="text-center p-12 border rounded-lg bg-gray-50">
                 <h3 className="text-xl font-medium text-gray-700 mb-2">No Results Yet</h3>
                 <p className="text-gray-500 mb-6">
-                  You haven't completed any quizzes yet. Take a quiz to see your results here.
+                  You haven&apos;t completed any quizzes yet. Take a quiz to see your results here.
                 </p>
               </div>
             )}
