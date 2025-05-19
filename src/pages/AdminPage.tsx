@@ -7,66 +7,28 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import StudentResultsTable from '../components/StudentResultsTable';
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from 'sonner';
 
-// Sample data
-const mockStudentResults = [
-  {
-    id: '1',
-    name: 'Alex Johnson',
-    email: 'alex@example.com',
-    level1Score: 8,
-    level2Score: 7,
-    level3Score: 6,
-    overallScore: 21,
-    lastAttempt: '2025-05-18'
-  },
-  {
-    id: '2',
-    name: 'Priya Sharma',
-    email: 'priya@example.com',
-    level1Score: 9,
-    level2Score: 8,
-    level3Score: 7,
-    overallScore: 24,
-    lastAttempt: '2025-05-17'
-  },
-  {
-    id: '3',
-    name: 'Mohammed Ali',
-    email: 'mohammed@example.com',
-    level1Score: 7,
-    level2Score: 6,
-    level3Score: 5,
-    overallScore: 18,
-    lastAttempt: '2025-05-16'
-  },
-  {
-    id: '4',
-    name: 'Sarah Green',
-    email: 'sarah@example.com',
-    level1Score: 10,
-    level2Score: 9,
-    level3Score: 8,
-    overallScore: 27,
-    lastAttempt: '2025-05-15'
-  },
-  {
-    id: '5',
-    name: 'John Smith',
-    email: 'john@example.com',
-    level1Score: 6,
-    level2Score: 7,
-    level3Score: 9,
-    overallScore: 22,
-    lastAttempt: '2025-05-15'
-  }
-];
+// Define the type for student results
+interface StudentResult {
+  id: string;
+  name: string;
+  email: string;
+  level1Score: number;
+  level2Score: number;
+  level3Score: number;
+  overallScore: number;
+  lastAttempt: string;
+}
 
 const AdminPage: React.FC = () => {
   const { currentUser } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [filteredResults, setFilteredResults] = useState(mockStudentResults);
+  const [studentResults, setStudentResults] = useState<StudentResult[]>([]);
+  const [filteredResults, setFilteredResults] = useState<StudentResult[]>([]);
   const [sortBy, setSortBy] = useState<string>('name');
+  const [isLoading, setIsLoading] = useState(true);
   
   // If user is not logged in or not a teacher, redirect
   if (!currentUser) {
@@ -77,9 +39,94 @@ const AdminPage: React.FC = () => {
     return <Navigate to="/dashboard" />;
   }
   
+  // Fetch student results from Supabase when the component mounts
+  useEffect(() => {
+    const fetchStudentResults = async () => {
+      setIsLoading(true);
+      try {
+        // First get all profiles that are students
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', 'student');
+          
+        if (profilesError) {
+          throw profilesError;
+        }
+        
+        if (!profiles || profiles.length === 0) {
+          setStudentResults([]);
+          setFilteredResults([]);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Then get all quiz attempts
+        const { data: attempts, error: attemptsError } = await supabase
+          .from('quiz_attempts')
+          .select('*')
+          .in('user_id', profiles.map(profile => profile.id));
+          
+        if (attemptsError) {
+          throw attemptsError;
+        }
+        
+        // Process the data into the format we need
+        const results: StudentResult[] = profiles.map(profile => {
+          // Filter attempts for this student
+          const studentAttempts = attempts?.filter(attempt => attempt.user_id === profile.id) || [];
+          
+          // Calculate scores by level
+          const level1Attempts = studentAttempts.filter(attempt => attempt.level === 1);
+          const level2Attempts = studentAttempts.filter(attempt => attempt.level === 2);
+          const level3Attempts = studentAttempts.filter(attempt => attempt.level === 3);
+          
+          // Get the best score for each level
+          const level1Score = level1Attempts.length > 0 
+            ? Math.max(...level1Attempts.map(a => a.score)) : 0;
+          const level2Score = level2Attempts.length > 0 
+            ? Math.max(...level2Attempts.map(a => a.score)) : 0;
+          const level3Score = level3Attempts.length > 0 
+            ? Math.max(...level3Attempts.map(a => a.score)) : 0;
+          
+          // Calculate overall score
+          const overallScore = level1Score + level2Score + level3Score;
+          
+          // Find the most recent attempt
+          const lastAttempt = studentAttempts.length > 0
+            ? studentAttempts.sort((a, b) => 
+                new Date(b.attempted_at).getTime() - new Date(a.attempted_at).getTime()
+              )[0].attempted_at
+            : '';
+            
+          return {
+            id: profile.id,
+            name: profile.name || 'Unknown',
+            email: profile.email || 'No email',
+            level1Score,
+            level2Score,
+            level3Score,
+            overallScore,
+            lastAttempt
+          };
+        });
+        
+        setStudentResults(results);
+        setFilteredResults(results);
+      } catch (error) {
+        console.error('Error fetching student results:', error);
+        toast.error('Failed to load student results');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchStudentResults();
+  }, [currentUser]);
+  
   // Filter and sort results when search or sort criteria change
   useEffect(() => {
-    let results = [...mockStudentResults];
+    let results = [...studentResults];
     
     // Filter by search term
     if (searchTerm) {
@@ -108,7 +155,7 @@ const AdminPage: React.FC = () => {
     });
     
     setFilteredResults(results);
-  }, [searchTerm, sortBy]);
+  }, [searchTerm, sortBy, studentResults]);
   
   // Export to CSV
   const handleExportCSV = () => {
@@ -185,7 +232,7 @@ const AdminPage: React.FC = () => {
       header: "Last Attempt",
       cell: ({ row }: any) => (
         <div className="text-sm">
-          {new Date(row.original.lastAttempt).toLocaleDateString()}
+          {row.original.lastAttempt ? new Date(row.original.lastAttempt).toLocaleDateString() : 'No attempts'}
         </div>
       ),
     }
@@ -202,7 +249,7 @@ const AdminPage: React.FC = () => {
             <CardTitle className="text-sm font-medium text-gray-500">Total Students</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{mockStudentResults.length}</div>
+            <div className="text-3xl font-bold">{filteredResults.length}</div>
           </CardContent>
         </Card>
         
@@ -212,7 +259,9 @@ const AdminPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {Math.round(mockStudentResults.reduce((acc, student) => acc + student.overallScore, 0) / mockStudentResults.length)}/30
+              {filteredResults.length > 0 
+                ? Math.round(filteredResults.reduce((acc, student) => acc + student.overallScore, 0) / filteredResults.length)
+                : 0}/30
             </div>
           </CardContent>
         </Card>
@@ -223,7 +272,9 @@ const AdminPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {Math.max(...mockStudentResults.map(student => student.overallScore))}/30
+              {filteredResults.length > 0
+                ? Math.max(...filteredResults.map(student => student.overallScore))
+                : 0}/30
             </div>
           </CardContent>
         </Card>
@@ -234,7 +285,9 @@ const AdminPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {Math.min(...mockStudentResults.map(student => student.overallScore))}/30
+              {filteredResults.length > 0
+                ? Math.min(...filteredResults.map(student => student.overallScore))
+                : 0}/30
             </div>
           </CardContent>
         </Card>
@@ -276,10 +329,18 @@ const AdminPage: React.FC = () => {
             </Button>
           </div>
           
-          <StudentResultsTable
-            columns={columns}
-            data={filteredResults}
-          />
+          {isLoading ? (
+            <div className="text-center py-8">Loading student results...</div>
+          ) : filteredResults.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              {searchTerm ? 'No students match your search' : 'No student data available yet'}
+            </div>
+          ) : (
+            <StudentResultsTable
+              columns={columns}
+              data={filteredResults}
+            />
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +10,15 @@ const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login, isLoading } = useAuth();
+  const { login, isLoading, currentUser } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/dashboard');
+    }
+  }, [currentUser, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,9 +32,20 @@ const LoginPage: React.FC = () => {
     try {
       await login(email, password);
       navigate('/dashboard');
-    } catch (err) {
-      setError('Failed to log in');
+    } catch (err: any) {
+      setError(err.message || 'Failed to log in');
       console.error(err);
+    }
+  };
+
+  // Demo accounts for quick testing
+  const useDemoAccount = (type: 'student' | 'teacher') => {
+    if (type === 'student') {
+      setEmail('student@example.com');
+      setPassword('password123');
+    } else {
+      setEmail('teacher@example.com');
+      setPassword('password123');
     }
   };
 
@@ -104,10 +122,7 @@ const LoginPage: React.FC = () => {
                   variant="outline"
                   size="sm"
                   className="text-xs"
-                  onClick={() => {
-                    setEmail('student@example.com');
-                    setPassword('password');
-                  }}
+                  onClick={() => useDemoAccount('student')}
                 >
                   Use Student Demo
                 </Button>
@@ -116,10 +131,7 @@ const LoginPage: React.FC = () => {
                   variant="outline"
                   size="sm"
                   className="text-xs"
-                  onClick={() => {
-                    setEmail('teacher@example.com');
-                    setPassword('password');
-                  }}
+                  onClick={() => useDemoAccount('teacher')}
                 >
                   Use Teacher Demo
                 </Button>

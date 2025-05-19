@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,8 +15,15 @@ const SignupPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [error, setError] = useState('');
-  const { signup, isLoading } = useAuth();
+  const { signup, isLoading, currentUser } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      navigate('/dashboard');
+    }
+  }, [currentUser, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,8 +48,8 @@ const SignupPage: React.FC = () => {
     try {
       await signup(name, email, password, role);
       navigate('/dashboard');
-    } catch (err) {
-      setError('Failed to create an account');
+    } catch (err: any) {
+      setError(err.message || 'Failed to create an account');
       console.error(err);
     }
   };

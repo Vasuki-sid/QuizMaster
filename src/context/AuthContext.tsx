@@ -2,12 +2,14 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { UserProfile } from '../types/quiz';
 import { toast } from 'sonner';
+import { supabase } from "@/integrations/supabase/client";
+import { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
   currentUser: UserProfile | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, role: 'student' | 'teacher') => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateUserProgress: (progress: any) => void;
   isLoading: boolean;
 }
@@ -15,65 +17,104 @@ interface AuthContextType {
 // Create the auth context
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// Mock users for demo
-const mockUsers: UserProfile[] = [
-  {
-    id: '1',
-    name: 'Student Demo',
-    email: 'student@example.com',
-    role: 'student',
-    progress: {
-      highestLevel: 1,
-      results: {}
-    }
-  },
-  {
-    id: '2',
-    name: 'Teacher Demo',
-    email: 'teacher@example.com',
-    role: 'teacher',
-    progress: {
-      highestLevel: 3,
-      results: {}
-    }
-  }
-];
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [users, setUsers] = useState<UserProfile[]>(mockUsers);
+  const [session, setSession] = useState<Session | null>(null);
 
-  // Check for stored user on initial load
+  // Initialize auth state and set up listener
   useEffect(() => {
-    const storedUser = localStorage.getItem('quiz_user');
-    if (storedUser) {
-      setCurrentUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
+    // First set up the auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, currentSession) => {
+        setSession(currentSession);
+        
+        if (event === 'SIGNED_OUT') {
+          setCurrentUser(null);
+        } else if (event === 'SIGNED_IN' && currentSession) {
+          // Defer fetching additional data to prevent deadlocks
+          setTimeout(() => {
+            fetchUserProfile(currentSession.user.id);
+          }, 0);
+        }
+      }
+    );
+
+    // Then check for existing session
+    const initializeAuth = async () => {
+      setIsLoading(true);
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        setSession(currentSession);
+        
+        if (currentSession?.user) {
+          await fetchUserProfile(currentSession.user.id);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  // Fetch user profile from the database
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching user profile:', error);
+        return;
+      }
+      
+      if (profile) {
+        // Convert Supabase profile to our app's UserProfile format
+        setCurrentUser({
+          id: profile.id,
+          name: profile.name,
+          email: profile.email,
+          role: profile.role as 'student' | 'teacher',
+          progress: {
+            highestLevel: 1,
+            results: {}
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error in fetchUserProfile:', error);
+    }
+  };
 
   // Login function
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Clean up existing auth state
+      cleanupAuthState();
       
-      // For demo, just check if email matches a mock user
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      // Sign in with email/password
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      if (user) {
-        // In real app, check password hash
-        setCurrentUser(user);
-        localStorage.setItem('quiz_user', JSON.stringify(user));
-        toast.success('Login successful');
-      } else {
-        toast.error('Invalid email or password');
+      if (error) {
+        throw error;
       }
-    } catch (error) {
-      toast.error('Login failed');
-      console.error(error);
+      
+      toast.success('Login successful');
+    } catch (error: any) {
+      toast.error(error.message || 'Login failed');
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -83,49 +124,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async (name: string, email: string, password: string, role: 'student' | 'teacher') => {
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Clean up existing auth state
+      cleanupAuthState();
       
-      // Check if user already exists
-      if (users.some(u => u.email.toLowerCase() === email.toLowerCase())) {
-        toast.error('Email already in use');
-        setIsLoading(false);
-        return;
+      // Sign up with email/password
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            role
+          }
+        }
+      });
+      
+      if (error) {
+        throw error;
       }
       
-      // Create new user
-      const newUser: UserProfile = {
-        id: `${users.length + 1}`,
-        name,
-        email,
-        role,
-        progress: {
-          highestLevel: 1,
-          results: {}
-        }
-      };
-      
-      setUsers([...users, newUser]);
-      setCurrentUser(newUser);
-      localStorage.setItem('quiz_user', JSON.stringify(newUser));
       toast.success('Account created successfully');
-    } catch (error) {
-      toast.error('Signup failed');
-      console.error(error);
+    } catch (error: any) {
+      toast.error(error.message || 'Signup failed');
+      throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
   // Logout function
-  const logout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('quiz_user');
-    toast.info('Logged out');
+  const logout = async () => {
+    try {
+      // Clean up auth state
+      cleanupAuthState();
+      
+      // Sign out
+      await supabase.auth.signOut();
+      
+      setCurrentUser(null);
+      toast.info('Logged out');
+    } catch (error: any) {
+      toast.error(error.message || 'Logout failed');
+      console.error(error);
+    }
+  };
+
+  // Helper function to clean up auth state
+  const cleanupAuthState = () => {
+    // Remove all Supabase auth keys from localStorage
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith('supabase.auth.') || key.includes('sb-')) {
+        localStorage.removeItem(key);
+      }
+    });
   };
 
   // Update user progress
-  const updateUserProgress = (progress: any) => {
+  const updateUserProgress = async (progress: any) => {
     if (!currentUser) return;
     
     const updatedUser = {
@@ -135,11 +190,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     setCurrentUser(updatedUser);
     
-    // Update in users array
-    setUsers(users.map(user => user.id === currentUser.id ? updatedUser : user));
-    
-    // Update in localStorage
-    localStorage.setItem('quiz_user', JSON.stringify(updatedUser));
+    // In a real implementation, we would save this to the database
+    // For now, we'll just track quiz attempts
+    if (progress.results && Object.keys(progress.results).length > 0) {
+      try {
+        // Get the latest quiz result
+        const levelKey = Object.keys(progress.results).pop() || "";
+        const levelNum = parseInt(levelKey.replace("level", ""));
+        const result = progress.results[levelKey];
+        
+        if (levelNum && result && session?.user) {
+          await supabase.from('quiz_attempts').insert({
+            user_id: session.user.id,
+            level: levelNum,
+            score: result.score,
+            total_questions: result.total
+          });
+        }
+      } catch (error) {
+        console.error('Error saving quiz attempt:', error);
+      }
+    }
   };
 
   return (
