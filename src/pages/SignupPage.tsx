@@ -7,6 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'sonner';
 
 const SignupPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -46,11 +47,21 @@ const SignupPage: React.FC = () => {
     }
     
     try {
+      console.log("Initiating signup process...");
       await signup(name, email, password, role);
-      navigate('/dashboard');
+      console.log("Signup completed, redirecting...");
+      
+      // Add a small delay before redirecting to ensure state updates
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 500);
     } catch (err: any) {
-      setError(err.message || 'Failed to create an account');
-      console.error(err);
+      console.error("Signup error in component:", err);
+      if (err.message?.includes('User already registered')) {
+        setError('This email is already registered. Please log in instead.');
+      } else {
+        setError(err.message || 'Failed to create an account');
+      }
     }
   };
 

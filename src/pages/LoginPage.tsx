@@ -3,8 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useAuth } from '../context/AuthContext';
+import { toast } from 'sonner';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -30,11 +31,17 @@ const LoginPage: React.FC = () => {
     }
     
     try {
+      console.log("Attempting login with:", email);
       await login(email, password);
+      console.log("Login successful, redirecting...");
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.message || 'Failed to log in');
-      console.error(err);
+      console.error("Login error:", err);
+      if (err.message?.includes('Invalid login credentials')) {
+        setError('Invalid email or password');
+      } else {
+        setError(err.message || 'Failed to log in');
+      }
     }
   };
 
@@ -139,6 +146,12 @@ const LoginPage: React.FC = () => {
             </div>
           </form>
         </CardContent>
+        
+        <CardFooter>
+          <div className="w-full text-center text-xs text-gray-500">
+            <p>Note: New accounts will be created and stored in Supabase when you sign up.</p>
+          </div>
+        </CardFooter>
       </Card>
     </div>
   );
