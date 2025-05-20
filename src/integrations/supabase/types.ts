@@ -62,7 +62,19 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      student_performance: {
+        Row: {
+          email: string | null
+          last_attempt: string | null
+          level1_score: number | null
+          level2_score: number | null
+          level3_score: number | null
+          name: string | null
+          total_score: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never

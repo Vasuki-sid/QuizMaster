@@ -15,11 +15,11 @@ interface StudentResult {
   id: string;
   name: string;
   email: string;
-  level1Score: number;
-  level2Score: number;
-  level3Score: number;
-  overallScore: number;
-  lastAttempt: string;
+  level1_score: number;
+  level2_score: number;
+  level3_score: number;
+  total_score: number;
+  last_attempt: string;
 }
 
 const AdminPage: React.FC = () => {
@@ -44,77 +44,33 @@ const AdminPage: React.FC = () => {
     const fetchStudentResults = async () => {
       setIsLoading(true);
       try {
-        // First get all profiles that are students
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('role', 'student');
+        const { data, error } = await supabase
+          .from('student_performance')
+          .select('*');
           
-        if (profilesError) {
-          throw profilesError;
-        }
-        
-        if (!profiles || profiles.length === 0) {
+        if (error) {
+          console.error('Error fetching student performance:', error);
+          toast.error('Failed to load student results');
           setStudentResults([]);
           setFilteredResults([]);
-          setIsLoading(false);
-          return;
+        } else if (data) {
+          // Process the data into the format we need
+          const results: StudentResult[] = data.map(student => ({
+            id: student.user_id || '',
+            name: student.name || 'Unknown',
+            email: student.email || 'No email',
+            level1_score: student.level1_score || 0,
+            level2_score: student.level2_score || 0,
+            level3_score: student.level3_score || 0,
+            total_score: student.total_score || 0,
+            last_attempt: student.last_attempt || '',
+          }));
+          
+          setStudentResults(results);
+          setFilteredResults(results);
         }
-        
-        // Then get all quiz attempts
-        const { data: attempts, error: attemptsError } = await supabase
-          .from('quiz_attempts')
-          .select('*')
-          .in('user_id', profiles.map(profile => profile.id));
-          
-        if (attemptsError) {
-          throw attemptsError;
-        }
-        
-        // Process the data into the format we need
-        const results: StudentResult[] = profiles.map(profile => {
-          // Filter attempts for this student
-          const studentAttempts = attempts?.filter(attempt => attempt.user_id === profile.id) || [];
-          
-          // Calculate scores by level
-          const level1Attempts = studentAttempts.filter(attempt => attempt.level === 1);
-          const level2Attempts = studentAttempts.filter(attempt => attempt.level === 2);
-          const level3Attempts = studentAttempts.filter(attempt => attempt.level === 3);
-          
-          // Get the best score for each level
-          const level1Score = level1Attempts.length > 0 
-            ? Math.max(...level1Attempts.map(a => a.score)) : 0;
-          const level2Score = level2Attempts.length > 0 
-            ? Math.max(...level2Attempts.map(a => a.score)) : 0;
-          const level3Score = level3Attempts.length > 0 
-            ? Math.max(...level3Attempts.map(a => a.score)) : 0;
-          
-          // Calculate overall score
-          const overallScore = level1Score + level2Score + level3Score;
-          
-          // Find the most recent attempt
-          const lastAttempt = studentAttempts.length > 0
-            ? studentAttempts.sort((a, b) => 
-                new Date(b.attempted_at).getTime() - new Date(a.attempted_at).getTime()
-              )[0].attempted_at
-            : '';
-            
-          return {
-            id: profile.id,
-            name: profile.name || 'Unknown',
-            email: profile.email || 'No email',
-            level1Score,
-            level2Score,
-            level3Score,
-            overallScore,
-            lastAttempt
-          };
-        });
-        
-        setStudentResults(results);
-        setFilteredResults(results);
       } catch (error) {
-        console.error('Error fetching student results:', error);
+        console.error('Exception fetching student results:', error);
         toast.error('Failed to load student results');
       } finally {
         setIsLoading(false);
@@ -145,10 +101,10 @@ const AdminPage: React.FC = () => {
           return a.name.localeCompare(b.name);
         case 'email':
           return a.email.localeCompare(b.email);
-        case 'overallScore':
-          return b.overallScore - a.overallScore;
-        case 'lastAttempt':
-          return new Date(b.lastAttempt).getTime() - new Date(a.lastAttempt).getTime();
+        case 'total_score':
+          return b.total_score - a.total_score;
+        case 'last_attempt':
+          return new Date(b.last_attempt).getTime() - new Date(a.last_attempt).getTime();
         default:
           return 0;
       }
@@ -160,11 +116,11 @@ const AdminPage: React.FC = () => {
   // Export to CSV
   const handleExportCSV = () => {
     // Create CSV header
-    let csv = 'Name,Email,Level 1 Score,Level 2 Score,Level 3 Score,Overall Score,Last Attempt\n';
+    let csv = 'Name,Email,Level 1 Score,Level 2 Score,Level 3 Score,Total Score,Last Attempt\n';
     
     // Add data rows
     filteredResults.forEach(student => {
-      csv += `${student.name},${student.email},${student.level1Score},${student.level2Score},${student.level3Score},${student.overallScore},${student.lastAttempt}\n`;
+      csv += `${student.name},${student.email},${student.level1_score},${student.level2_score},${student.level3_score},${student.total_score},${student.last_attempt}\n`;
     });
     
     // Create download link
@@ -192,47 +148,47 @@ const AdminPage: React.FC = () => {
       cell: ({ row }: any) => <div className="text-sm">{row.original.email}</div>,
     },
     {
-      accessorKey: "level1Score",
+      accessorKey: "level1_score",
       header: "Level 1",
       cell: ({ row }: any) => (
         <div className="font-medium">
-          {row.original.level1Score}/10
+          {row.original.level1_score}/10
         </div>
       ),
     },
     {
-      accessorKey: "level2Score",
+      accessorKey: "level2_score",
       header: "Level 2",
       cell: ({ row }: any) => (
         <div className="font-medium">
-          {row.original.level2Score}/10
+          {row.original.level2_score}/10
         </div>
       ),
     },
     {
-      accessorKey: "level3Score",
+      accessorKey: "level3_score",
       header: "Level 3",
       cell: ({ row }: any) => (
         <div className="font-medium">
-          {row.original.level3Score}/10
+          {row.original.level3_score}/10
         </div>
       ),
     },
     {
-      accessorKey: "overallScore",
+      accessorKey: "total_score",
       header: "Overall",
       cell: ({ row }: any) => (
         <div className="font-medium">
-          {row.original.overallScore}/30
+          {row.original.total_score}/30
         </div>
       ),
     },
     {
-      accessorKey: "lastAttempt",
+      accessorKey: "last_attempt",
       header: "Last Attempt",
       cell: ({ row }: any) => (
         <div className="text-sm">
-          {row.original.lastAttempt ? new Date(row.original.lastAttempt).toLocaleDateString() : 'No attempts'}
+          {row.original.last_attempt ? new Date(row.original.last_attempt).toLocaleDateString() : 'No attempts'}
         </div>
       ),
     }
@@ -260,7 +216,7 @@ const AdminPage: React.FC = () => {
           <CardContent>
             <div className="text-3xl font-bold">
               {filteredResults.length > 0 
-                ? Math.round(filteredResults.reduce((acc, student) => acc + student.overallScore, 0) / filteredResults.length)
+                ? Math.round(filteredResults.reduce((acc, student) => acc + student.total_score, 0) / filteredResults.length)
                 : 0}/30
             </div>
           </CardContent>
@@ -273,7 +229,7 @@ const AdminPage: React.FC = () => {
           <CardContent>
             <div className="text-3xl font-bold">
               {filteredResults.length > 0
-                ? Math.max(...filteredResults.map(student => student.overallScore))
+                ? Math.max(...filteredResults.map(student => student.total_score))
                 : 0}/30
             </div>
           </CardContent>
@@ -286,7 +242,7 @@ const AdminPage: React.FC = () => {
           <CardContent>
             <div className="text-3xl font-bold">
               {filteredResults.length > 0
-                ? Math.min(...filteredResults.map(student => student.overallScore))
+                ? Math.min(...filteredResults.map(student => student.total_score))
                 : 0}/30
             </div>
           </CardContent>
@@ -315,8 +271,8 @@ const AdminPage: React.FC = () => {
                 <SelectContent>
                   <SelectItem value="name">Name</SelectItem>
                   <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="overallScore">Highest Score</SelectItem>
-                  <SelectItem value="lastAttempt">Most Recent</SelectItem>
+                  <SelectItem value="total_score">Highest Score</SelectItem>
+                  <SelectItem value="last_attempt">Most Recent</SelectItem>
                 </SelectContent>
               </Select>
             </div>

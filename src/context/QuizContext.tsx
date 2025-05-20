@@ -1,8 +1,10 @@
-import React, { createContext, useState, useContext } from 'react';
+
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import { QuizLevel, QuizQuestion, QuizAnswer, QuizResult, UserQuizProgress } from '../types/quiz';
 import { getQuestionsByLevel } from '../data/quizData';
 import { useAuth } from './AuthContext';
 import { toast } from 'sonner';
+import { supabase } from "@/integrations/supabase/client";
 
 interface QuizContextType {
   currentLevel: QuizLevel;
@@ -45,13 +47,60 @@ export const QuizProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
   
   // Update user progress when currentUser changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (currentUser) {
       // Set user progress with all levels unlocked
       setUserProgress({
         ...currentUser.progress,
         highestLevel: 3 // All levels unlocked
       });
+      
+      // Fetch user's quiz attempts from Supabase
+      const fetchUserAttempts = async () => {
+        if (!currentUser.id) return;
+        
+        try {
+          const { data: attempts, error } = await supabase
+            .from('quiz_attempts')
+            .select('*')
+            .eq('user_id', currentUser.id);
+            
+          if (error) {
+            console.error('Error fetching quiz attempts:', error);
+            return;
+          }
+          
+          if (attempts && attempts.length > 0) {
+            // Process attempts to update userProgress
+            const newResults: { [key: number]: QuizResult } = {};
+            
+            attempts.forEach(attempt => {
+              const level = attempt.level as QuizLevel;
+              
+              // If this is a better score than what we have, or we don't have a score yet
+              if (!newResults[level] || attempt.score > newResults[level].score) {
+                newResults[level] = {
+                  level,
+                  score: attempt.score,
+                  totalQuestions: attempt.total_questions,
+                  answers: [],
+                  timeSpent: 0, // We don't have this data from DB
+                  completedAt: attempt.attempted_at
+                };
+              }
+            });
+            
+            setUserProgress(prev => ({
+              ...prev,
+              results: newResults
+            }));
+          }
+        } catch (error) {
+          console.error('Error processing quiz attempts:', error);
+        }
+      };
+      
+      fetchUserAttempts();
     } else {
       setUserProgress({ highestLevel: 3, results: {} }); // All levels unlocked by default
     }
@@ -105,7 +154,7 @@ export const QuizProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Submit the quiz and calculate results
-  const submitQuiz = () => {
+  const submitQuiz = async () => {
     if (!startTime) return;
     
     const timeSpent = Math.floor((Date.now() - startTime) / 1000);
@@ -153,6 +202,27 @@ export const QuizProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setUserProgress(newProgress);
       updateUserProgress(newProgress);
+      
+      // Save attempt to Supabase
+      try {
+        const { error } = await supabase
+          .from('quiz_attempts')
+          .insert({
+            user_id: currentUser.id,
+            level: currentLevel,
+            score: correctCount,
+            total_questions: questions.length,
+          });
+          
+        if (error) {
+          console.error('Error saving quiz attempt:', error);
+          toast.error('Failed to save quiz result to database');
+        } else {
+          console.log('Quiz attempt saved to database');
+        }
+      } catch (error) {
+        console.error('Exception saving quiz attempt:', error);
+      }
     }
   };
 
